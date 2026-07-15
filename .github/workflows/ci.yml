@@ -1,39 +1,19 @@
 name: CI
-
 on:
   push:
     branches: [ "master", "main" ]
   pull_request:
     branches: [ "master", "main" ]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: 0
-  CARGO_BUILD_JOBS: 1
-
 jobs:
   contracts:
-    name: Contract Verification (${{ matrix.contract }})
+    name: Contract Verification
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        contract: [poll_contract, rewards_contract]
-    defaults:
-      run:
-        working-directory: ./contracts/${{ matrix.contract }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           targets: wasm32-unknown-unknown
-
       - name: Cache Cargo build
         uses: actions/cache@v4
         with:
@@ -42,17 +22,19 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            contracts/${{ matrix.contract }}/target/
-          key: ${{ runner.os }}-cargo-ci-${{ matrix.contract }}-${{ hashFiles(format('contracts/{0}/Cargo.lock', matrix.contract)) }}
+            contracts/poll_contract/target/
+            contracts/rewards_contract/target/
+          key: ${{ runner.os }}-cargo-ci-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-ci-${{ matrix.contract }}-
-
+            ${{ runner.os }}-cargo-ci-
       - name: Build Contracts
-        run: cargo build --target wasm32-unknown-unknown --release
-
+        run: |
+          cargo build --manifest-path contracts/poll_contract/Cargo.toml --target wasm32-unknown-unknown --release
+          cargo build --manifest-path contracts/rewards_contract/Cargo.toml --target wasm32-unknown-unknown --release
       - name: Run Contract Tests
-        run: cargo test --workspace --verbose
-
+        run: |
+          cargo test --manifest-path contracts/poll_contract/Cargo.toml --workspace --verbose
+          cargo test --manifest-path contracts/rewards_contract/Cargo.toml --workspace --verbose
   frontend:
     name: Frontend Verification
     runs-on: ubuntu-latest
@@ -61,19 +43,15 @@ jobs:
         working-directory: ./frontend
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-
       - name: Run tests
         run: npm run test
-
       - name: Build
         run: npm run build
