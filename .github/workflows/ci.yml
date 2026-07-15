@@ -4,10 +4,22 @@ on:
     branches: [ "master", "main" ]
   pull_request:
     branches: [ "master", "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_BUILD_JOBS: 1
+
 jobs:
   contracts:
-    name: Contract Verification
+    name: Contract Verification (${{ matrix.contract }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        contract: [poll_contract, rewards_contract]
+    defaults:
+      run:
+        working-directory: ./contracts/${{ matrix.contract }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -22,19 +34,15 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            contracts/poll_contract/target/
-            contracts/rewards_contract/target/
-          key: ${{ runner.os }}-cargo-ci-${{ hashFiles('**/Cargo.lock') }}
+            contracts/${{ matrix.contract }}/target/
+          key: ${{ runner.os }}-cargo-ci-${{ matrix.contract }}-${{ hashFiles(format('contracts/{0}/Cargo.lock', matrix.contract)) }}
           restore-keys: |
-            ${{ runner.os }}-cargo-ci-
+            ${{ runner.os }}-cargo-ci-${{ matrix.contract }}-
       - name: Build Contracts
-        run: |
-          cargo build --manifest-path contracts/poll_contract/Cargo.toml --target wasm32-unknown-unknown --release
-          cargo build --manifest-path contracts/rewards_contract/Cargo.toml --target wasm32-unknown-unknown --release
+        run: cargo build --target wasm32-unknown-unknown --release
       - name: Run Contract Tests
-        run: |
-          cargo test --manifest-path contracts/poll_contract/Cargo.toml --workspace --verbose
-          cargo test --manifest-path contracts/rewards_contract/Cargo.toml --workspace --verbose
+        run: cargo test --workspace --verbose
+
   frontend:
     name: Frontend Verification
     runs-on: ubuntu-latest
